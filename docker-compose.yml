@@ -2,24 +2,31 @@ version: '3.9'
 
 services:
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    build: ./frontend
     ports:
       - "3000:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy   # ← improved dependency
+    networks:
+      - todo-net
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    build: ./backend
     ports:
       - "5000:5000"
     environment:
       - DATABASE_URL=postgres://user:pass@db:5432/tododb
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    healthcheck:                      # ← shows resilience
+      test: ["CMD", "wget", "--spider", "http://localhost:5000/api/todos"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - todo-net
 
   db:
     image: postgres:16-alpine
@@ -28,9 +35,20 @@ services:
       POSTGRES_PASSWORD: pass
       POSTGRES_DB: tododb
     ports:
-      - "5432:5432"   # optional - for local pgAdmin
+      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - todo-net
+
+networks:
+  todo-net:                           
+    driver: bridge
 
 volumes:
   pgdata:
