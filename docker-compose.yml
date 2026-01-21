@@ -1,54 +1,50 @@
-version: '3.9'
-
 services:
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:80"
-    depends_on:
-      backend:
-        condition: service_healthy   # ← improved dependency
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
     networks:
       - todo-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5  
 
   backend:
     build: ./backend
     ports:
       - "5000:5000"
     environment:
-      - DATABASE_URL=postgres://user:pass@db:5432/tododb
+      DATABASE_URL: ${DATABASE_URL}
     depends_on:
       db:
         condition: service_healthy
-    healthcheck:                      # ← shows resilience
-      test: ["CMD", "wget", "--spider", "http://localhost:5000/api/todos"]
+    networks:
+      - todo-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:5000/api/todos"]
       interval: 10s
       timeout: 5s
-      retries: 5
-    networks:
-      - todo-net
+      retries: 5  
 
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: pass
-      POSTGRES_DB: tododb
+  frontend:
+    build: ./frontend
     ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
     networks:
       - todo-net
-
-networks:
-  todo-net:                           
-    driver: bridge
 
 volumes:
   pgdata:
+
+networks:
+  todo-net:
+    driver: bridge  
