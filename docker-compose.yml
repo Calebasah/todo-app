@@ -1,29 +1,70 @@
 services:
-  db:
+  # Main todo database
+  todo-db:
     image: postgres:16-alpine
+    container_name: todo-db
     environment:
-      POSTGRES_USER: ${DB_USER}
+      POSTGRES_USER: todo_user
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_DB: todo_db
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata-todo:/var/lib/postgresql/data
     networks:
       - todo-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      test: ["CMD-SHELL", "pg_isready -U todo_user -d todo_db"]
       interval: 5s
       timeout: 5s
-      retries: 5  
+      retries: 5
+      start_period: 10s
+
+  # Separate DB for user data
+  user-db:
+    image: postgres:16-alpine
+    container_name: user-db
+    environment:
+      POSTGRES_USER: user_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: user_db
+    volumes:
+      - pgdata-user:/var/lib/postgresql/data
+    networks:
+      - todo-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user_user -d user_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Separate DB for analytics
+  analytics-db:
+    image: postgres:16-alpine
+    container_name: analytics-db
+    environment:
+      POSTGRES_USER: analytics_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: analytics_db
+    volumes:
+      - pgdata-analytics:/var/lib/postgresql/data
+    networks:
+      - todo-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U analytics_user -d analytics_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   backend:
     build: ./backend
     ports:
       - "5000:5000"
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: postgres://todo_user:${DB_PASSWORD}@todo-db:5432/todo_db
       REDIS_URL: redis://redis:6379
     depends_on:
-      db:
+      todo-db:
         condition: service_healthy
     networks:
       - todo-net
@@ -59,7 +100,9 @@ services:
       retries: 5    
 
 volumes:
-  pgdata:
+  pgdata-todo:
+  pgdata-user:
+  pgdata-analytics:
   redis-data:
 
 networks:
